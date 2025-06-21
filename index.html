@@ -5,42 +5,23 @@
   <style>
     body { font-family: sans-serif; text-align: center; padding: 30px; }
     .email { font-size: 20px; font-weight: bold; color: green; }
-    .msg { border: 1px solid #ccc; margin: 10px; padding: 10px; }
+    .msg { border: 1px solid #ccc; margin: 10px; padding: 10px; text-align: left; max-width: 600px; margin-left: auto; margin-right: auto;}
+    button { margin-top: 10px; padding: 8px 12px; font-size: 16px; cursor: pointer; }
   </style>
 </head>
 <body>
   <h1>🕶️ Your Temp Mail</h1>
+  <p>Your email address:</p>
   <p class="email">Generating...</p>
+  <button id="copyBtn">Copy Email</button>
+  <h2>Inbox</h2>
   <div id="inbox">📬 Checking inbox...</div>
+  <button id="refreshBtn">Refresh Inbox</button>
 
   <script>
     let token = "";
-    let accountId = "";
     let address = "";
-
-    async function createAccount() {
-      let rand = Math.random().toString(36).substring(2, 10);
-      let email = rand + "@mail.tm";
-      let password = rand + rand;
-
-      await fetch("https://api.mail.tm/accounts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ address: email, password: password }),
-      });
-
-      let res = await fetch("https://api.mail.tm/token", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ address: email, password: password }),
-      });
-
-      let data = await res.json();
-      token = data.token;
-      address = email;
-      document.querySelector(".email").textContent = email;
-      checkInbox();
-    }
+    let password = "";
 
     async function checkInbox() {
       let res = await fetch("https://api.mail.tm/messages", {
@@ -50,19 +31,95 @@
       let inboxDiv = document.getElementById("inbox");
       inboxDiv.innerHTML = "";
       if (messages["hydra:member"].length === 0) {
-        inboxDiv.innerHTML = "No messages yet. Try again in a minute.";
+        inboxDiv.innerHTML = "No messages yet. Try sending an email to your temp address.";
       } else {
         messages["hydra:member"].forEach((msg) => {
           let div = document.createElement("div");
           div.className = "msg";
-          div.innerHTML = `<b>From:</b> ${msg.from.address}<br><b>Subject:</b> ${msg.subject}`;
+          div.innerHTML = `
+            <b>From:</b> ${msg.from.address}<br>
+            <b>Subject:</b> ${msg.subject}<br>
+            <details>
+              <summary>Read message</summary>
+              <div id="msgBody${msg.id}">Loading...</div>
+            </details>
+          `;
           inboxDiv.appendChild(div);
+
+          // Fetch full message body
+          fetch(`https://api.mail.tm/messages/${msg.id}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          .then(response => response.json())
+          .then(data => {
+            document.getElementById(`msgBody${msg.id}`).innerHTML = data.text || "No text content";
+          })
+          .catch(() => {
+            document.getElementById(`msgBody${msg.id}`).innerHTML = "Failed to load message.";
+          });
         });
       }
-      setTimeout(checkInbox, 10000); // Refresh every 10 seconds
     }
 
-    createAccount();
+    async function createOrLoadAccount() {
+      let storedEmail = localStorage.getItem("tempEmail");
+      let storedToken = localStorage.getItem("tempToken");
+      let storedPassword = localStorage.getItem("tempPassword");
+
+      if (storedEmail && storedToken && storedPassword) {
+        token = storedToken;
+        address = storedEmail;
+        password = storedPassword;
+        document.querySelector(".email").textContent = address;
+        checkInbox();
+      } else {
+        let rand = Math.random().toString(36).substring(2, 10);
+        let email = rand + "@mail.tm";
+        let pass = rand + rand;
+
+        // Create account
+        await fetch("https://api.mail.tm/accounts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ address: email, password: pass }),
+        });
+
+        // Get token
+        let res = await fetch("https://api.mail.tm/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ address: email, password: pass }),
+        });
+        let data = await res.json();
+
+        token = data.token;
+        address = email;
+        password = pass;
+
+        localStorage.setItem("tempEmail", address);
+        localStorage.setItem("tempToken", token);
+        localStorage.setItem("tempPassword", password);
+
+        document.querySelector(".email").textContent = address;
+        checkInbox();
+      }
+    }
+
+    // Copy email to clipboard
+    document.getElementById("copyBtn").addEventListener("click", () => {
+      navigator.clipboard.writeText(address).then(() => {
+        alert("Email copied to clipboard!");
+      });
+    });
+
+    // Refresh inbox manually
+    document.getElementById("refreshBtn").addEventListener("click", () => {
+      checkInbox();
+    });
+
+    createOrLoadAccount();
+    // Auto-refresh inbox every 20 seconds
+    setInterval(checkInbox, 20000);
   </script>
 </body>
 </html>
