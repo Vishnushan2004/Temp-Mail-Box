@@ -1,174 +1,49 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <title>Temp Mail Box</title>
+  <title>Simple Temp Mail with 1secmail</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f8f9fa;
-      text-align: center;
-      padding: 30px;
-    }
-    .email {
-      font-size: 20px;
-      font-weight: bold;
-      color: green;
-      margin: 10px;
-    }
-    .message {
-      background: #fff;
-      padding: 15px;
-      margin: 15px auto;
-      border-radius: 8px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-      max-width: 600px;
-      text-align: left;
-    }
-    .message pre {
-      background: #f1f1f1;
-      padding: 10px;
-      white-space: pre-wrap;
-    }
-    button {
-      padding: 10px 14px;
-      margin: 5px;
-      background: #007bff;
-      color: white;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-    }
-    button:hover {
-      background: #0056b3;
-    }
+    body { font-family: Arial; padding: 20px; }
+    #email { font-weight: bold; color: green; }
+    .message { border: 1px solid #ccc; padding: 10px; margin: 10px 0; }
   </style>
 </head>
 <body>
-  <h1>📨 Temp Mail Box</h1>
-  <p>Your email address:</p>
-  <p class="email">Loading...</p>
-  <button onclick="copyEmail()">📋 Copy Email</button>
-  <button onclick="checkInbox()">🔄 Refresh Inbox</button>
-
-  <h2>Inbox</h2>
-  <div id="inbox"><p>📭 Inbox is ready. Waiting for messages...</p></div>
+  <h1>Simple Temp Mail</h1>
+  <p>Your email: <span id="email"></span></p>
+  <button onclick="refreshInbox()">Refresh Inbox</button>
+  <div id="inbox">Inbox will show here</div>
 
   <script>
-    let token = "", email = "", password = "";
+    // Generate random email
+    const username = Math.random().toString(36).substring(2,10);
+    const domain = "1secmail.com";
+    const email = username + "@" + domain;
+    document.getElementById("email").textContent = email;
 
-    async function login() {
-      try {
-        const res = await fetch("https://api.mail.tm/token", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ address: email, password }),
-        });
-        const data = await res.json();
-        if(data.token) {
-          token = data.token;
-          return true;
-        } else {
-          return false;
-        }
-      } catch (err) {
-        console.error("Login error", err);
-        return false;
-      }
-    }
-
-    async function createAccount() {
-      try {
-        await fetch("https://api.mail.tm/accounts", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ address: email, password }),
-        });
-        return true;
-      } catch (err) {
-        console.error("Create account error", err);
-        return false;
-      }
-    }
-
-    async function init() {
-      const rand = Math.random().toString(36).substring(2, 10);
-      email = `${rand}@mail.tm`;
-      password = rand + rand;
-      document.querySelector(".email").textContent = email;
-
-      // Try login first
-      let loggedIn = await login();
-
-      if (!loggedIn) {
-        // Create account then login
-        const created = await createAccount();
-        if(!created) {
-          document.getElementById("inbox").innerHTML = "<p>❌ Failed to create account. Refresh and try again.</p>";
-          return;
-        }
-
-        // Retry login after account creation
-        loggedIn = await login();
-        if(!loggedIn) {
-          document.getElementById("inbox").innerHTML = "<p>❌ Failed to login after creating account. Try again later.</p>";
-          return;
-        }
-      }
-
-      // Now token is ready
-      checkInbox();
-    }
-
-    async function checkInbox() {
+    async function refreshInbox() {
       const inbox = document.getElementById("inbox");
-      inbox.innerHTML = "<p>🔄 Loading inbox...</p>";
-
-      if (!token) {
-        inbox.innerHTML = "<p>❌ Token missing. Please reload the page.</p>";
-        return;
-      }
-
+      inbox.textContent = "Loading messages...";
       try {
-        const res = await fetch("https://api.mail.tm/messages", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        const data = await res.json();
-
-        inbox.innerHTML = "";
-
-        if (!data["hydra:member"] || data["hydra:member"].length === 0) {
-          inbox.innerHTML = "<p>📭 No messages yet. Send one to your temp email.</p>";
+        const res = await fetch(`https://www.1secmail.com/api/v1/?action=getMessages&login=${username}&domain=${domain}`);
+        const messages = await res.json();
+        if(messages.length === 0) {
+          inbox.textContent = "No messages yet.";
           return;
         }
-
-        for (let msg of data["hydra:member"]) {
-          const res2 = await fetch(`https://api.mail.tm/messages/${msg.id}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          const full = await res2.json();
-
-          inbox.innerHTML += `
-            <div class="message">
-              <b>From:</b> ${msg.from.address}<br>
-              <b>Subject:</b> ${msg.subject}<br>
-              <pre>${full.text || "No content"}</pre>
-            </div>`;
+        inbox.innerHTML = "";
+        for(const msg of messages) {
+          const msgRes = await fetch(`https://www.1secmail.com/api/v1/?action=readMessage&login=${username}&domain=${domain}&id=${msg.id}`);
+          const fullMsg = await msgRes.json();
+          inbox.innerHTML += `<div class="message"><b>From:</b> ${fullMsg.from}<br><b>Subject:</b> ${fullMsg.subject}<br><pre>${fullMsg.textBody || "No content"}</pre></div>`;
         }
-      } catch (err) {
-        inbox.innerHTML = "<p>⚠️ Could not load inbox. Try again.</p>";
-        console.error("Inbox load error:", err);
+      } catch(e) {
+        inbox.textContent = "Failed to load inbox.";
+        console.error(e);
       }
     }
 
-    function copyEmail() {
-      navigator.clipboard.writeText(email).then(() => {
-        alert("📋 Copied: " + email);
-      });
-    }
-
-    init();
+    refreshInbox();
   </script>
 </body>
 </html>
