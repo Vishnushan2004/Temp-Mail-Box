@@ -1,131 +1,145 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <meta charset="UTF-8" />
   <title>Temp Mail Box</title>
   <style>
     body {
       font-family: Arial, sans-serif;
+      background-color: #f8f9fa;
+      padding: 30px;
       text-align: center;
-      padding: 20px;
-      background: #f5f5f5;
     }
     .email {
       font-size: 22px;
       font-weight: bold;
-      color: green;
-    }
-    #inbox {
-      margin-top: 30px;
+      color: #2b9348;
+      margin: 10px 0;
     }
     .message {
-      background: #fff;
+      background: #ffffff;
+      border-radius: 8px;
       padding: 15px;
-      margin: 10px auto;
-      border-radius: 10px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      margin: 15px auto;
       max-width: 600px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
       text-align: left;
     }
     .message pre {
-      background: #eee;
+      background: #f1f1f1;
       padding: 10px;
       overflow-x: auto;
+      white-space: pre-wrap;
     }
     button {
-      margin-top: 10px;
-      padding: 8px 12px;
+      padding: 10px 16px;
       font-size: 16px;
+      margin: 8px;
       cursor: pointer;
+      border: none;
+      border-radius: 6px;
+      background-color: #007bff;
+      color: white;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    #inbox {
+      margin-top: 30px;
     }
   </style>
 </head>
 <body>
   <h1>📨 Your Temp Mail</h1>
-  <p>Your email address:</p>
+  <p>Your temporary email address:</p>
   <p class="email">Loading...</p>
-  <button onclick="copyEmail()">Copy Email</button>
+  <button onclick="copyEmail()">📋 Copy Email</button>
+  <button onclick="checkInbox()">🔄 Refresh Inbox</button>
 
   <h2>Inbox</h2>
-  <div id="inbox">Checking inbox...</div>
+  <div id="inbox">📭 Loading inbox...</div>
 
   <script>
-    let token = "", address = "", password = "";
+    let token = "", email = "", password = "";
 
-    async function checkInbox() {
-      const res = await fetch("https://api.mail.tm/messages", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      const inbox = document.getElementById("inbox");
-      inbox.innerHTML = "";
-
-      if (!data["hydra:member"].length) {
-        inbox.innerHTML = "📭 No messages yet.";
-        return;
-      }
-
-      for (let msg of data["hydra:member"]) {
-        const res2 = await fetch(`https://api.mail.tm/messages/${msg.id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const full = await res2.json();
-        inbox.innerHTML += `
-          <div class="message">
-            <b>From:</b> ${msg.from.address}<br>
-            <b>Subject:</b> ${msg.subject}<br>
-            <pre>${full.text || "No text content"}</pre>
-          </div>
-        `;
-      }
-    }
-
-    async function loadOrCreateAccount() {
-      if (
-        localStorage.getItem("email") &&
-        localStorage.getItem("token") &&
-        localStorage.getItem("password")
-      ) {
-        address = localStorage.getItem("email");
-        token = localStorage.getItem("token");
-        password = localStorage.getItem("password");
-        document.querySelector(".email").textContent = address;
-        checkInbox();
-        return;
-      }
-
-      let rand = Math.random().toString(36).substring(2, 10);
-      address = `${rand}@mail.tm`;
+    async function createAccount() {
+      const rand = Math.random().toString(36).substring(2, 10);
+      email = `${rand}@mail.tm`;
       password = rand + rand;
 
       await fetch("https://api.mail.tm/accounts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ address, password }),
+        body: JSON.stringify({ address: email, password }),
       });
 
       const res = await fetch("https://api.mail.tm/token", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ address, password }),
+        body: JSON.stringify({ address: email, password }),
       });
-      const data = await res.json();
 
+      const data = await res.json();
       token = data.token;
-      localStorage.setItem("email", address);
-      localStorage.setItem("password", password);
-      localStorage.setItem("token", token);
-      document.querySelector(".email").textContent = address;
-      checkInbox();
+
+      sessionStorage.setItem("temp_email", email);
+      sessionStorage.setItem("temp_password", password);
+      sessionStorage.setItem("temp_token", token);
+
+      document.querySelector(".email").textContent = email;
+    }
+
+    async function checkInbox() {
+      const inbox = document.getElementById("inbox");
+      inbox.innerHTML = "🔍 Checking inbox...";
+
+      try {
+        const res = await fetch("https://api.mail.tm/messages", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+
+        inbox.innerHTML = "";
+
+        if (!data["hydra:member"].length) {
+          inbox.innerHTML = "📭 No messages yet.";
+          return;
+        }
+
+        for (let msg of data["hydra:member"]) {
+          const res2 = await fetch(`https://api.mail.tm/messages/${msg.id}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const full = await res2.json();
+
+          inbox.innerHTML += `
+            <div class="message">
+              <b>From:</b> ${msg.from.address}<br>
+              <b>Subject:</b> ${msg.subject}<br>
+              <pre>${full.text || "No text content"}</pre>
+            </div>`;
+        }
+      } catch (err) {
+        inbox.innerHTML = "⚠️ Failed to load inbox.";
+        console.error(err);
+      }
     }
 
     function copyEmail() {
-      navigator.clipboard.writeText(address).then(() => {
-        alert("📋 Email copied: " + address);
+      navigator.clipboard.writeText(email).then(() => {
+        alert("📋 Email copied: " + email);
       });
     }
 
-    loadOrCreateAccount();
-    setInterval(checkInbox, 15000); // refresh inbox every 15 sec
+    async function initialize() {
+      // On every page load, create a new temp email session
+      sessionStorage.clear(); // Forces refresh-based generation
+
+      await createAccount();
+      checkInbox();
+    }
+
+    initialize();
   </script>
 </body>
 </html>
