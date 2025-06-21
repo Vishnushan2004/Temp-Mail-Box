@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Temp Mail Box</title>
   <style>
     body {
@@ -57,52 +57,67 @@
   <script>
     let token = "", email = "", password = "";
 
-    async function createAccountAndLogin() {
+    async function login() {
       try {
-        const rand = Math.random().toString(36).substring(2, 10);
-        email = `${rand}@mail.tm`;
-        password = rand + rand;
+        const res = await fetch("https://api.mail.tm/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ address: email, password }),
+        });
+        const data = await res.json();
+        if(data.token) {
+          token = data.token;
+          return true;
+        } else {
+          return false;
+        }
+      } catch (err) {
+        console.error("Login error", err);
+        return false;
+      }
+    }
 
-        document.querySelector(".email").textContent = email;
-
-        // 1. Create account
+    async function createAccount() {
+      try {
         await fetch("https://api.mail.tm/accounts", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ address: email, password }),
         });
+        return true;
+      } catch (err) {
+        console.error("Create account error", err);
+        return false;
+      }
+    }
 
-        // 2. Try getting token (retry if needed)
-        for (let i = 0; i < 3; i++) {
-          const res = await fetch("https://api.mail.tm/token", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ address: email, password }),
-          });
+    async function init() {
+      const rand = Math.random().toString(36).substring(2, 10);
+      email = `${rand}@mail.tm`;
+      password = rand + rand;
+      document.querySelector(".email").textContent = email;
 
-          const data = await res.json();
+      // Try login first
+      let loggedIn = await login();
 
-          if (data.token) {
-            token = data.token;
-            break;
-          }
-
-          // Wait before retry
-          await new Promise(r => setTimeout(r, 1000));
-        }
-
-        if (!token) {
-          document.getElementById("inbox").innerHTML = "<p>❌ Failed to get token. Try refreshing in 1 minute.</p>";
+      if (!loggedIn) {
+        // Create account then login
+        const created = await createAccount();
+        if(!created) {
+          document.getElementById("inbox").innerHTML = "<p>❌ Failed to create account. Refresh and try again.</p>";
           return;
         }
 
-        // 3. Load inbox
-        checkInbox();
-
-      } catch (err) {
-        document.getElementById("inbox").innerHTML = "<p>❌ Error creating email. Try again later.</p>";
-        console.error(err);
+        // Retry login after account creation
+        loggedIn = await login();
+        if(!loggedIn) {
+          document.getElementById("inbox").innerHTML = "<p>❌ Failed to login after creating account. Try again later.</p>";
+          return;
+        }
       }
+
+      // Now token is ready
+      checkInbox();
     }
 
     async function checkInbox() {
@@ -120,6 +135,7 @@
         });
 
         const data = await res.json();
+
         inbox.innerHTML = "";
 
         if (!data["hydra:member"] || data["hydra:member"].length === 0) {
@@ -140,7 +156,6 @@
               <pre>${full.text || "No content"}</pre>
             </div>`;
         }
-
       } catch (err) {
         inbox.innerHTML = "<p>⚠️ Could not load inbox. Try again.</p>";
         console.error("Inbox load error:", err);
@@ -153,8 +168,7 @@
       });
     }
 
-    // Run on load
-    createAccountAndLogin();
+    init();
   </script>
 </body>
 </html>
