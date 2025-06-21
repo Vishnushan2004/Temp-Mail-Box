@@ -1,51 +1,144 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8" /><title>Temp Mail Test</title></head>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Free Temp Phone Numbers</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f7fa;
+      text-align: center;
+      padding: 20px;
+    }
+    .container {
+      max-width: 600px;
+      margin: auto;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px #ccc;
+    }
+    h1 {
+      color: #222;
+    }
+    #phone-number {
+      font-size: 24px;
+      font-weight: bold;
+      margin: 20px 0;
+      color: #007bff;
+    }
+    #messages {
+      text-align: left;
+      max-height: 300px;
+      overflow-y: auto;
+      border: 1px solid #ddd;
+      padding: 10px;
+      border-radius: 6px;
+      background: #fafafa;
+    }
+    .message {
+      margin-bottom: 12px;
+      padding: 8px;
+      background: #e1f0ff;
+      border-radius: 4px;
+    }
+    button {
+      padding: 10px 20px;
+      margin: 15px 10px 0 10px;
+      font-size: 16px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      background: #007bff;
+      color: white;
+      transition: background 0.3s ease;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    footer {
+      margin-top: 40px;
+      font-size: 14px;
+      color: #555;
+    }
+  </style>
+</head>
 <body>
-  <h1>Temp Mail Inbox</h1>
-  <div id="email"></div>
-  <button onclick="refreshInbox()">Refresh Inbox</button>
-  <div id="inbox"></div>
+  <div class="container">
+    <h1>Free Temporary Phone Number</h1>
+    <div id="phone-number">Loading number...</div>
+    <button onclick="generateNumberAndMessages()">Generate New Number & Messages</button>
+    <div id="messages">Loading messages...</div>
+  </div>
+
+  <footer>
+    <p>Note: This is a demo site with simulated phone numbers and messages.</p>
+  </footer>
 
   <script>
-    const username = 'abc123xy';  // replace with your actual username here
-    const domain = '1secmail.com'; // replace if different
-
-    const email = `${username}@${domain}`;
-    document.getElementById("email").textContent = `Email: ${email}`;
-
-    async function refreshInbox() {
-      const inboxDiv = document.getElementById("inbox");
-      inboxDiv.textContent = "Loading inbox...";
-      try {
-        const res = await fetch(`https://www.1secmail.com/api/v1/?action=getMessages&login=${username}&domain=${domain}`);
-        if(!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-
-        const messages = await res.json();
-
-        if(!messages.length) {
-          inboxDiv.textContent = "No messages yet.";
-          return;
-        }
-
-        inboxDiv.innerHTML = "";
-        for(const msg of messages) {
-          const res2 = await fetch(`https://www.1secmail.com/api/v1/?action=readMessage&login=${username}&domain=${domain}&id=${msg.id}`);
-          const fullMsg = await res2.json();
-
-          inboxDiv.innerHTML += `<div style="border:1px solid #ccc; padding:10px; margin-bottom:10px;">
-            <b>From:</b> ${fullMsg.from} <br/>
-            <b>Subject:</b> ${fullMsg.subject} <br/>
-            <pre>${fullMsg.textBody || fullMsg.htmlBody || "No content"}</pre>
-          </div>`;
-        }
-      } catch(e) {
-        inboxDiv.textContent = `Error loading inbox: ${e.message}`;
-        console.error(e);
+    function generatePhoneNumber() {
+      function randomDigit() {
+        return Math.floor(Math.random() * 10);
       }
+      let areaCode = '';
+      for(let i=0; i<3; i++) areaCode += randomDigit();
+      let centralOfficeCode = '';
+      for(let i=0; i<3; i++) centralOfficeCode += randomDigit();
+      let lineNumber = '';
+      for(let i=0; i<4; i++) lineNumber += randomDigit();
+      return `+1 (${areaCode}) ${centralOfficeCode}-${lineNumber}`;
     }
 
-    refreshInbox();
+    const sampleMessages = [
+      "Your verification code is 482910.",
+      "You have a new notification.",
+      "Don't forget your appointment tomorrow at 10 AM.",
+      "Your package has been shipped.",
+      "Welcome! Your temporary phone number is ready.",
+      "Use code SAVE20 to get 20% off your order.",
+      "This is a test SMS message.",
+      "Your OTP is 349823. Do not share with anyone.",
+      "Your account balance is $34.56.",
+      "Reminder: Meeting scheduled at 3 PM today.",
+      "Hello! This is a simulated SMS for demo purposes."
+    ];
+
+    function getRandomInt(max) {
+      return Math.floor(Math.random() * max);
+    }
+
+    function generateMessages() {
+      const count = 3 + getRandomInt(4);
+      const messages = [];
+      for (let i = 0; i < count; i++) {
+        const idx = getRandomInt(sampleMessages.length);
+        const time = new Date(Date.now() - getRandomInt(86400000))
+          .toLocaleString();
+        messages.push({
+          text: sampleMessages[idx],
+          time: time
+        });
+      }
+      return messages;
+    }
+
+    function generateNumberAndMessages() {
+      const phoneNumber = generatePhoneNumber();
+      document.getElementById("phone-number").innerText = phoneNumber;
+
+      const messages = generateMessages();
+      const messagesContainer = document.getElementById("messages");
+      messagesContainer.innerHTML = '';
+      messages.forEach(msg => {
+        const div = document.createElement('div');
+        div.className = 'message';
+        div.innerHTML = `<b>${msg.time}</b><br>${msg.text}`;
+        messagesContainer.appendChild(div);
+      });
+    }
+
+    window.onload = generateNumberAndMessages;
   </script>
 </body>
 </html>
