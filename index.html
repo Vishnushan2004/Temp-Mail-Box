@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8" /><title>Temp Mail Inbox Debug</title></head>
+<head><meta charset="UTF-8" /><title>Temp Mail Test</title></head>
 <body>
   <h1>Temp Mail Inbox</h1>
   <div id="email"></div>
@@ -8,14 +8,15 @@
   <div id="inbox"></div>
 
   <script>
-    const username = Math.random().toString(36).substring(2, 10);
-    const domain = "1secmail.com";
+    const username = 'abc123xy';  // replace with your actual username here
+    const domain = '1secmail.com'; // replace if different
+
     const email = `${username}@${domain}`;
     document.getElementById("email").textContent = `Email: ${email}`;
 
     async function refreshInbox() {
       const inboxDiv = document.getElementById("inbox");
-      inboxDiv.textContent = "Loading...";
+      inboxDiv.textContent = "Loading inbox...";
       try {
         const res = await fetch(`https://www.1secmail.com/api/v1/?action=getMessages&login=${username}&domain=${domain}`);
         if(!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
@@ -32,11 +33,10 @@
           const res2 = await fetch(`https://www.1secmail.com/api/v1/?action=readMessage&login=${username}&domain=${domain}&id=${msg.id}`);
           const fullMsg = await res2.json();
 
-          inboxDiv.innerHTML += `<div>
+          inboxDiv.innerHTML += `<div style="border:1px solid #ccc; padding:10px; margin-bottom:10px;">
             <b>From:</b> ${fullMsg.from} <br/>
             <b>Subject:</b> ${fullMsg.subject} <br/>
             <pre>${fullMsg.textBody || fullMsg.htmlBody || "No content"}</pre>
-            <hr/>
           </div>`;
         }
       } catch(e) {
