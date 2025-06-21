@@ -1,146 +1,89 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Temp Mail Box</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f8f9fa;
-      text-align: center;
-      padding: 30px;
+<script>
+  let token = "", email = "", password = "";
+
+  async function createAccountAndLogin() {
+    try {
+      const rand = Math.random().toString(36).substring(2, 10);
+      email = `${rand}@mail.tm`;
+      password = rand + rand;
+
+      await fetch("https://api.mail.tm/accounts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ address: email, password }),
+      });
+
+      const res = await fetch("https://api.mail.tm/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ address: email, password }),
+      });
+
+      const data = await res.json();
+      token = data.token;
+      document.querySelector(".email").textContent = email;
+
+      // Try checking inbox every 5 seconds until it's ready
+      const tryInbox = setInterval(() => {
+        if (token) {
+          clearInterval(tryInbox);
+          checkInbox();
+        }
+      }, 5000);
+
+    } catch (err) {
+      document.getElementById("inbox").innerHTML = "<p>❌ Error creating temp mail. Try again later.</p>";
+      console.error("Account creation error:", err);
     }
-    .email {
-      font-size: 20px;
-      font-weight: bold;
-      color: green;
-      margin: 10px;
-    }
-    .message {
-      background: #fff;
-      padding: 15px;
-      margin: 15px auto;
-      border-radius: 8px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-      max-width: 600px;
-      text-align: left;
-    }
-    .message pre {
-      background: #f1f1f1;
-      padding: 10px;
-      white-space: pre-wrap;
-    }
-    button {
-      padding: 10px 14px;
-      margin: 5px;
-      background: #007bff;
-      color: white;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-    }
-    button:hover {
-      background: #0056b3;
-    }
-  </style>
-</head>
-<body>
-  <h1>📨 Temp Mail Box</h1>
-  <p>Your email address:</p>
-  <p class="email">Loading...</p>
-  <button onclick="copyEmail()">📋 Copy Email</button>
-  <button onclick="checkInbox()">🔄 Refresh Inbox</button>
+  }
 
-  <h2>Inbox</h2>
-  <div id="inbox">
-    <p>📭 Inbox is ready. Waiting for messages...</p>
-  </div>
+  async function checkInbox() {
+    const inbox = document.getElementById("inbox");
+    inbox.innerHTML = "<p>🔄 Checking inbox...</p>";
 
-  <script>
-    let token = "";
-    let email = "";
-    let password = "";
-
-    async function createAccountAndLogin() {
-      try {
-        const rand = Math.random().toString(36).substring(2, 10);
-        email = `${rand}@mail.tm`;
-        password = rand + rand;
-
-        // Create account
-        await fetch("https://api.mail.tm/accounts", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ address: email, password }),
-        });
-
-        // Get token
-        const res = await fetch("https://api.mail.tm/token", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ address: email, password }),
-        });
-        const data = await res.json();
-
-        token = data.token;
-        document.querySelector(".email").textContent = email;
-
-        await checkInbox(); // Safe to load inbox now
-      } catch (err) {
-        document.getElementById("inbox").innerHTML = "<p>❌ Error creating temp mail. Try again later.</p>";
-        console.error("Account error:", err);
-      }
+    if (!token) {
+      inbox.innerHTML = "<p>⏳ Still waiting for setup. Trying again shortly...</p>";
+      return;
     }
 
-    async function checkInbox() {
-      const inbox = document.getElementById("inbox");
-      inbox.innerHTML = "<p>🔄 Loading inbox...</p>";
+    try {
+      const res = await fetch("https://api.mail.tm/messages", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-      if (!token) {
-        inbox.innerHTML = "<p>⏳ Please wait... Email is still being set up.</p>";
+      const data = await res.json();
+      inbox.innerHTML = "";
+
+      if (!data["hydra:member"].length) {
+        inbox.innerHTML = "<p>📭 No messages yet. Send one to your email.</p>";
         return;
       }
 
-      try {
-        const res = await fetch("https://api.mail.tm/messages", {
+      for (let msg of data["hydra:member"]) {
+        const res2 = await fetch(`https://api.mail.tm/messages/${msg.id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        const data = await res.json();
+        const full = await res2.json();
 
-        inbox.innerHTML = "";
-
-        if (!data["hydra:member"].length) {
-          inbox.innerHTML = "<p>📭 No messages yet. Send one to your temp email above.</p>";
-          return;
-        }
-
-        for (let msg of data["hydra:member"]) {
-          const res2 = await fetch(`https://api.mail.tm/messages/${msg.id}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          const full = await res2.json();
-
-          inbox.innerHTML += `
-            <div class="message">
-              <b>From:</b> ${msg.from.address}<br>
-              <b>Subject:</b> ${msg.subject}<br>
-              <pre>${full.text || "No content"}</pre>
-            </div>`;
-        }
-      } catch (err) {
-        inbox.innerHTML = "<p>⚠️ Failed to load inbox. Try again.</p>";
-        console.error("Inbox error:", err);
+        inbox.innerHTML += `
+          <div class="message">
+            <b>From:</b> ${msg.from.address}<br>
+            <b>Subject:</b> ${msg.subject}<br>
+            <pre>${full.text || "No content"}</pre>
+          </div>`;
       }
-    }
 
-    function copyEmail() {
-      navigator.clipboard.writeText(email).then(() => {
-        alert("📋 Email copied: " + email);
-      });
+    } catch (err) {
+      inbox.innerHTML = "<p>⚠️ Failed to load inbox. Try again.</p>";
+      console.error("Inbox error:", err);
     }
+  }
 
-    // Start the app after DOM is ready
-    createAccountAndLogin();
-  </script>
-</body>
-</html>
+  function copyEmail() {
+    navigator.clipboard.writeText(email).then(() => {
+      alert("📋 Copied: " + email);
+    });
+  }
+
+  createAccountAndLogin(); // Start app on load
+</script>
