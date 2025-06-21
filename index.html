@@ -1,125 +1,69 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Free Temp Mail</title>
-  <style>
-    body { font-family: sans-serif; text-align: center; padding: 30px; }
-    .email { font-size: 20px; font-weight: bold; color: green; }
-    .msg { border: 1px solid #ccc; margin: 10px; padding: 10px; text-align: left; max-width: 600px; margin-left: auto; margin-right: auto;}
-    button { margin-top: 10px; padding: 8px 12px; font-size: 16px; cursor: pointer; }
-  </style>
-</head>
-<body>
-  <h1>🕶️ Your Temp Mail</h1>
-  <p>Your email address:</p>
-  <p class="email">Generating...</p>
-  <button id="copyBtn">Copy Email</button>
-  <h2>Inbox</h2>
-  <div id="inbox">📬 Checking inbox...</div>
-  <button id="refreshBtn">Refresh Inbox</button>
+<script>
+let token = "", address = "", password = "";
 
-  <script>
-    let token = "";
-    let address = "";
-    let password = "";
+async function checkInbox() {
+  const res = await fetch("https://api.mail.tm/messages", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  const inbox = document.getElementById("inbox");
+  inbox.innerHTML = "";
 
-    async function checkInbox() {
-      let res = await fetch("https://api.mail.tm/messages", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      let messages = await res.json();
-      let inboxDiv = document.getElementById("inbox");
-      inboxDiv.innerHTML = "";
-      if (messages["hydra:member"].length === 0) {
-        inboxDiv.innerHTML = "No messages yet. Try sending an email to your temp address.";
-      } else {
-        messages["hydra:member"].forEach((msg) => {
-          let div = document.createElement("div");
-          div.className = "msg";
-          div.innerHTML = `
-            <b>From:</b> ${msg.from.address}<br>
-            <b>Subject:</b> ${msg.subject}<br>
-            <details>
-              <summary>Read message</summary>
-              <div id="msgBody${msg.id}">Loading...</div>
-            </details>
-          `;
-          inboxDiv.appendChild(div);
+  if (!data["hydra:member"].length) {
+    inbox.innerHTML = "📭 No messages yet.";
+    return;
+  }
 
-          // Fetch full message body
-          fetch(`https://api.mail.tm/messages/${msg.id}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          })
-          .then(response => response.json())
-          .then(data => {
-            document.getElementById(`msgBody${msg.id}`).innerHTML = data.text || "No text content";
-          })
-          .catch(() => {
-            document.getElementById(`msgBody${msg.id}`).innerHTML = "Failed to load message.";
-          });
-        });
-      }
-    }
-
-    async function createOrLoadAccount() {
-      let storedEmail = localStorage.getItem("tempEmail");
-      let storedToken = localStorage.getItem("tempToken");
-      let storedPassword = localStorage.getItem("tempPassword");
-
-      if (storedEmail && storedToken && storedPassword) {
-        token = storedToken;
-        address = storedEmail;
-        password = storedPassword;
-        document.querySelector(".email").textContent = address;
-        checkInbox();
-      } else {
-        let rand = Math.random().toString(36).substring(2, 10);
-        let email = rand + "@mail.tm";
-        let pass = rand + rand;
-
-        // Create account
-        await fetch("https://api.mail.tm/accounts", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ address: email, password: pass }),
-        });
-
-        // Get token
-        let res = await fetch("https://api.mail.tm/token", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ address: email, password: pass }),
-        });
-        let data = await res.json();
-
-        token = data.token;
-        address = email;
-        password = pass;
-
-        localStorage.setItem("tempEmail", address);
-        localStorage.setItem("tempToken", token);
-        localStorage.setItem("tempPassword", password);
-
-        document.querySelector(".email").textContent = address;
-        checkInbox();
-      }
-    }
-
-    // Copy email to clipboard
-    document.getElementById("copyBtn").addEventListener("click", () => {
-      navigator.clipboard.writeText(address).then(() => {
-        alert("Email copied to clipboard!");
-      });
+  for (let msg of data["hydra:member"]) {
+    const res2 = await fetch(`https://api.mail.tm/messages/${msg.id}`, {
+      headers: { Authorization: `Bearer ${token}` },
     });
+    const full = await res2.json();
+    inbox.innerHTML += `<div><b>From:</b> ${msg.from.address}<br><b>Subject:</b> ${msg.subject}<br><pre>${full.text}</pre><hr></div>`;
+  }
+}
 
-    // Refresh inbox manually
-    document.getElementById("refreshBtn").addEventListener("click", () => {
-      checkInbox();
-    });
+async function loadOrCreateAccount() {
+  if (
+    localStorage.getItem("email") &&
+    localStorage.getItem("token") &&
+    localStorage.getItem("password")
+  ) {
+    address = localStorage.getItem("email");
+    token = localStorage.getItem("token");
+    password = localStorage.getItem("password");
+    document.querySelector(".email").textContent = address;
+    checkInbox();
+    return;
+  }
 
-    createOrLoadAccount();
-    // Auto-refresh inbox every 20 seconds
-    setInterval(checkInbox, 20000);
-  </script>
-</body>
-</html>
+  let rand = Math.random().toString(36).substring(2, 10);
+  address = `${rand}@mail.tm`;
+  password = rand + rand;
+
+  await fetch("https://api.mail.tm/accounts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ address, password }),
+  });
+
+  const res = await fetch("https://api.mail.tm/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ address, password }),
+  });
+  const data = await res.json();
+
+  token = data.token;
+  localStorage.setItem("email", address);
+  localStorage.setItem("password", password);
+  localStorage.setItem("token", token);
+  document.querySelector(".email").textContent = address;
+  checkInbox();
+}
+
+loadOrCreateAccount();
+setInterval(checkInbox, 15000);
+</script>
+<p class="email">Loading...</p>
+<div id="inbox">Checking inbox...</div>
